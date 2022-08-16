@@ -13,7 +13,6 @@ def process_pdf_auto(self,
             extract_images=self.current_app_config.extract_images,
             s3_client=self.s3_client
         )
-
         if filecontent:
             data_coordinates, doc_total_pages = pdf_reader.read_pdf_file(filecontent=filecontent)
         else:
