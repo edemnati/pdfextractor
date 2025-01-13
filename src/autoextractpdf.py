@@ -1,17 +1,28 @@
-def process_pdf_auto(self,
-                        filename: str,
+import os
+import json
+import datetime
+import pandas as pd
+import numpy as np
+import math as mt
+import camelot
+
+def process_pdf_auto(df_pdf_data: str,
+                        filename = "test.pdf",
+                        output_path="out",
                         filecontent=None,
                         direction="dataframe",
                         save_text_coordinates_to_local: bool = False,
                         save_file_to_local: bool = False,
+                        extract_images=False,
                         extract_by_page: bool = True):
 
     try:
+        """
         pdf_reader = PDFReader(
-            file_path=os.path.join(self.current_app_config.input_path, filename),
-            output_path=self.current_app_config.output_path,
-            extract_images=self.current_app_config.extract_images,
-            s3_client=self.s3_client
+            file_path=os.path.join(current_app_config.input_path, filename),
+            output_path=current_app_config.output_path,
+            extract_images=current_app_config.extract_images,
+            s3_client=s3_client
         )
         if filecontent:
             data_coordinates, doc_total_pages = pdf_reader.read_pdf_file(filecontent=filecontent)
@@ -23,37 +34,33 @@ def process_pdf_auto(self,
         if save_text_coordinates_to_local:
             data_coordinates_filename = f'data_coordinates_{filename.split(".")[0]}_{str(datetime.date.today())}.csv'
             pd.DataFrame(data_coordinates).to_csv(
-                os.path.join(self.current_app_config.output_path, data_coordinates_filename)
+                os.path.join(current_app_config.output_path, data_coordinates_filename)
             )
 
         df_pdf_data = pd.DataFrame(data_coordinates)
-
-
-
+        """
         # Extract data as tables
         if direction=="dataframe":
-            procesed_file_content = self.extract_auto_tables(df_pdf_data=df_pdf_data,
+            procesed_file_content = extract_auto_tables(df_pdf_data=df_pdf_data,
                                                                 filename=filename,
                                                                 extract_by_page=extract_by_page)
         # Extract data as key/value
         else:
-            procesed_file_content = self.extract_auto_keyvalues(df_pdf_data=df_pdf_data,
+            procesed_file_content = extract_auto_keyvalues(df_pdf_data=df_pdf_data,
                                                                 filename=filename,
                                                                 extract_by_page=extract_by_page)
         if save_file_to_local:
-            json_filename = F"{filename.split('.')[0]}.json"
-            with open(os.path.join(self.current_app_config.output_path, json_filename), "w") as f:
+            json_filename = F"{filename.split('/')[-1].split('.')[0]}.json"
+            with open(os.path.join(output_path, json_filename), "w") as f:
                 json.dump(procesed_file_content, f)
 
         return procesed_file_content
     except Exception as e:
-        logger.info(
-            f"Error occurred during process_pdf_auto(filename={filename})"
-        )
-        logger.info(e)
+        print(f"Error occurred during process_pdf_auto(filename={filename})")
+        print(e)
         return None
 
-def extract_auto_keyvalues(self, df_pdf_data, filename, max_treshold:int = 3, extract_by_page: bool = True):
+def extract_auto_keyvalues( df_pdf_data, filename, max_treshold:int = 3, extract_by_page: bool = True):
 
     """
     :param df_pdf_data:
@@ -224,7 +231,19 @@ def extract_auto_keyvalues(self, df_pdf_data, filename, max_treshold:int = 3, ex
 
     return page_list
 
-def extract_auto_tables(self,df_pdf_data,filename,extract_by_page: bool = True):
+def concat_list_to_string(data_content):
+    """
+    Concatenate liste of strings to a single string
+
+    Args:
+        data_content (_type_): _description_
+    """
+    temp_string = ""
+    for row in data_content:
+        for key, value in row.items():
+            temp_string += value + " "
+    return temp_string
+def extract_auto_tables(df_pdf_data,filename,extract_by_page: bool = True):
         # group text that is in the same line and count number of element in each group
         df_pdf_data["bbox.y0_rounded"] = df_pdf_data["bbox.y0"].apply(lambda x: mt.floor(x))
         df_pdf_data_group = df_pdf_data.groupby(["page_num", "bbox.y0_rounded"])
@@ -328,7 +347,7 @@ def extract_auto_tables(self,df_pdf_data,filename,extract_by_page: bool = True):
             if extract_by_page == False:
                 table_areas = [f"{row['bbox.x0']-10},{row['bbox.y0']+10},{row['bbox.x1']+10},{row['bbox.y1']-10}"]
             tables = camelot.read_pdf(
-                os.path.join(self.current_app_config.input_path, filename),
+                filename,
                 pages=f"{row['page_num']}",
                 flavor="stream",
                 table_areas=table_areas,
@@ -343,7 +362,7 @@ def extract_auto_tables(self,df_pdf_data,filename,extract_by_page: bool = True):
             if not temp_df.empty:
                 data_content = temp_df.to_dict(orient="records")
                 if row["direction"] == "text":
-                    data_content = self.concat_list_to_string(data_content)
+                    data_content = concat_list_to_string(data_content)
 
                 list_data.append({"page_num": row["page_num"],
                                     "section_id": i,

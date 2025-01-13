@@ -1,0 +1,5 @@
+
+pandas
+pdfreader
+camelot-py
+opencv-python
